@@ -18,9 +18,10 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SSH_HOST: 187.124.213.14
+      SSH_PORT: '2222'
       SITE_USER: bazmivoicechat
       WEBROOT: /home/bazmivoicechat/htdocs/bazmivoicechat.com
-      SSH_OPTS: -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new -o ConnectTimeout=25 -o ServerAliveInterval=15
+      SSH_OPTS: -i ~/.ssh/id_ed25519 -p 2222 -o StrictHostKeyChecking=accept-new -o ConnectTimeout=25 -o ServerAliveInterval=15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,7 +32,7 @@ jobs:
           printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           # Best-effort known_hosts; accept-new below handles first connect anyway.
-          ssh-keyscan -t rsa,ed25519 -T 10 "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh-keyscan -p "$SSH_PORT" -t rsa,ed25519 -T 10 "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: Upload site (rsync)
         run: |
