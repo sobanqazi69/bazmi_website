@@ -20,27 +20,29 @@ jobs:
       SSH_HOST: 187.124.213.14
       SITE_USER: bazmivoicechat
       WEBROOT: /home/bazmivoicechat/htdocs/bazmivoicechat.com
+      SSH_OPTS: -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=accept-new -o ConnectTimeout=25 -o ServerAliveInterval=15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up SSH
+      - name: Set up SSH key
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          # Best-effort known_hosts; accept-new below handles first connect anyway.
+          ssh-keyscan -t rsa,ed25519 -T 10 "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: Upload site (rsync)
         run: |
           rsync -az --omit-dir-times --no-perms \
-            -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes" \
+            -e "ssh $SSH_OPTS" \
             index.html assets \
             "root@${SSH_HOST}:${WEBROOT}/"
 
       - name: Fix ownership & permissions
         run: |
-          ssh -i ~/.ssh/id_ed25519 "root@${SSH_HOST}" "
+          ssh $SSH_OPTS "root@${SSH_HOST}" "
             chown -R ${SITE_USER}:${SITE_USER} ${WEBROOT}/index.html ${WEBROOT}/assets
             chmod 644 ${WEBROOT}/index.html
             chmod 755 ${WEBROOT}/assets
@@ -49,7 +51,7 @@ jobs:
 
       - name: Verify live
         run: |
-          CODE=$(ssh -i ~/.ssh/id_ed25519 "root@${SSH_HOST}" \
+          CODE=$(ssh $SSH_OPTS "root@${SSH_HOST}" \
             "curl -sk -o /dev/null -w '%{http_code}' https://bazmivoicechat.com/")
-          echo "https://bazmivoicechat.com → HTTP $CODE"
+          echo "https://bazmivoicechat.com -> HTTP $CODE"
           test "$CODE" = "200"
