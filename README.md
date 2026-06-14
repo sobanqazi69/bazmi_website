@@ -24,7 +24,25 @@ python3 -m http.server 8000   # then visit http://localhost:8000
 ```
 
 ## Deploy
-Any static host works (GitHub Pages, Vercel, Netlify, Cloudflare Pages) — point it at the repo root.
+
+Live at **https://bazmivoicechat.com** (CloudPanel server `187.124.213.14`, web root
+`/home/bazmivoicechat/htdocs/bazmivoicechat.com`).
+
+One command — uploads `index.html` + `assets/`, fixes ownership, verifies the site responds:
+
+```bash
+./deploy.sh
+```
+
+Requires SSH key access to `root@187.124.213.14`. Static files only, so no nginx reload is
+needed. Edit the config block at the top of `deploy.sh` to change host/domain/web root.
+
+> Note: the nginx vhost's `location /` was switched from a (down) reverse-proxy to
+> `try_files $uri $uri/ /index.html`. A backup lives on the server at
+> `…/bazmivoicechat.com.conf.bak-static-deploy`. If you change this site's settings in the
+> CloudPanel UI it may regenerate the vhost and revert that block — re-apply if so.
+
+Any static host also works (GitHub Pages, Vercel, Netlify, Cloudflare Pages) — point it at the repo root.
 
 ---
 © 2026 Bazmi Voice Chat · Where voices become a vibe.
