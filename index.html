@@ -308,14 +308,43 @@
   @media(max-width:1000px){.rooms-grid{grid-template-columns:repeat(3,1fr)}}
   @media(max-width:760px){.rooms-grid{grid-template-columns:repeat(2,1fr)}}
   @media(max-width:480px){.rooms-grid{grid-template-columns:1fr}}
+  /* mobile: swipeable snap carousel instead of a long, boring stack */
+  @media(max-width:620px){
+    .rooms-grid{display:flex;grid-template-columns:none;gap:14px;overflow-x:auto;overflow-y:visible;
+      scroll-snap-type:x mandatory;padding:6px 2px 16px;margin-top:8px;
+      -webkit-overflow-scrolling:touch;scrollbar-width:none}
+    .rooms-grid::-webkit-scrollbar{display:none}
+    .rooms-grid .rcard{flex:0 0 80%;scroll-snap-align:start}
+    .rooms-grid .rcard:active{transform:scale(.98)}
+    .rooms-grid .rooms-empty{flex:0 0 100%}
+    .swipe-hint{display:flex}
+  }
+  .swipe-hint{display:none;align-items:center;justify-content:center;gap:8px;margin-top:6px;
+    font-size:12px;font-weight:600;color:var(--muted)}
+  .swipe-hint svg{width:16px;height:16px;stroke:var(--purple);fill:none;animation:swipeNudge 1.6s ease-in-out infinite}
+  @keyframes swipeNudge{0%,100%{transform:translateX(0)}50%{transform:translateX(5px)}}
 
   .rcard{position:relative;background:var(--card);border:1px solid var(--line);border-radius:22px;overflow:hidden;
-    box-shadow:var(--shadow);transition:transform .35s cubic-bezier(.2,.7,.2,1),box-shadow .35s;
-    opacity:0;transform:translateY(20px) scale(.98);animation:cardIn .6s cubic-bezier(.2,.7,.2,1) forwards}
+    box-shadow:var(--shadow);transition:transform .4s cubic-bezier(.2,.7,.2,1),box-shadow .4s,border-color .4s;
+    opacity:0;transform:translateY(28px) scale(.95);animation:cardIn .7s cubic-bezier(.2,.7,.2,1) forwards;will-change:transform}
   @keyframes cardIn{to{opacity:1;transform:none}}
-  .rcard:hover{transform:translateY(-6px);box-shadow:var(--shadow-lg)}
-  .rcard .banner{position:relative;height:92px;background-size:cover;background-position:center;overflow:hidden}
-  .rcard .banner::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.05),rgba(26,16,64,.35))}
+  .rcard:hover{transform:translateY(-10px) scale(1.02);border-color:transparent;
+    box-shadow:0 38px 72px -28px rgba(123,47,190,.55),0 0 0 1.5px rgba(224,69,123,.3)}
+  .rcard .banner{position:relative;height:92px;background-size:cover;background-position:center;overflow:hidden;
+    transition:transform .65s cubic-bezier(.2,.7,.2,1)}
+  .rcard:hover .banner{transform:scale(1.09)}
+  .rcard .banner::after{content:"";position:absolute;inset:0;z-index:1;background:linear-gradient(180deg,rgba(0,0,0,.04),rgba(26,16,64,.38))}
+  /* hover light sweep */
+  .rcard .banner::before{content:"";position:absolute;inset:0;z-index:2;pointer-events:none;
+    background:linear-gradient(115deg,transparent 38%,rgba(255,255,255,.55) 50%,transparent 62%);
+    transform:translateX(-130%);transition:transform .8s cubic-bezier(.3,.7,.3,1)}
+  .rcard:hover .banner::before{transform:translateX(130%)}
+  .rcard:hover .join{box-shadow:0 12px 24px -8px rgba(224,69,123,.85)}
+  .rcard:hover .av-wrap{transform:scale(1.06) rotate(-2deg)}
+  .rcard .av-wrap{transition:transform .4s cubic-bezier(.2,.7,.2,1)}
+  /* kicker live ping */
+  .kicker .live-ping{display:inline-block;width:7px;height:7px;border-radius:50%;background:#ef4444;position:relative;margin-right:8px;vertical-align:middle}
+  .kicker .live-ping::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:2px solid #ef4444;animation:ring 1.8s ease-out infinite}
   .rcard .banner .eq{position:absolute;right:12px;bottom:10px;z-index:2;display:flex;align-items:flex-end;gap:2.5px;height:20px}
   .rcard .banner .eq i{width:3px;border-radius:2px;background:#fff;opacity:.92;animation:eq 1s ease-in-out infinite}
   .rcard .live-pill{position:absolute;top:10px;left:10px;z-index:2;display:flex;align-items:center;gap:6px;
@@ -514,21 +543,15 @@
 </header>
 
 <!-- live rooms wall -->
-<section id="live">
+<section id="live" style="padding-bottom:28px">
   <div class="wrap">
-    <div class="sec-head reveal" style="max-width:680px">
-      <div class="kicker">Happening now</div>
+    <div class="sec-head reveal" style="max-width:680px;margin-bottom:40px">
+      <div class="kicker"><span class="live-ping"></span> Happening now</div>
       <h2>Real rooms, <span class="grad-text">live right now.</span></h2>
       <p>This isn't a mockup — these are actual Bazmi rooms open this very second, pulled live from the app.</p>
-      <div class="live-bar">
-        <span class="dot"></span><b id="liveCount">—</b>&nbsp;rooms open
-        <span class="sep"></span>
-        <span>🌍 <b id="liveCountries">—</b> countries</span>
-        <span class="sep"></span>
-        <span class="syncing"><i></i> auto-refreshing</span>
-      </div>
     </div>
     <div class="rooms-grid reveal" id="roomsGrid" data-d="2"></div>
+    <div class="swipe-hint">Swipe to explore <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
   </div>
 </section>
 
