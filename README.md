@@ -28,21 +28,42 @@ python3 -m http.server 8000   # then visit http://localhost:8000
 Live at **https://bazmivoicechat.com** (CloudPanel server `187.124.213.14`, web root
 `/home/bazmivoicechat/htdocs/bazmivoicechat.com`).
 
-One command — uploads `index.html` + `assets/`, fixes ownership, verifies the site responds:
+### How it works — pull-based CD
+
+The host sits behind a provider firewall that **drops inbound SSH from datacenter/cloud IP
+ranges** (ports 22 *and* 2222 time out from GitHub runners; only 80/443 are open). So a
+classic "GitHub Actions pushes over SSH" model can't reach the box. Instead it's pull-based:
+
+```
+  push to GitHub  ──►  server systemd timer pulls every 60s  ──►  syncs to web root
+                                     │
+                                     └─ publishes live commit to /deployed.txt
+  GitHub Actions (deploy.yml) ──► polls https://bazmivoicechat.com/deployed.txt
+                                  over 443 until it == the pushed commit (pass/fail)
+```
+
+So: **just `git push` — production updates within ~60s**, and the Actions run goes green once
+it confirms production is serving that commit.
+
+Server pieces (already installed):
+- `/usr/local/bin/bazmi-website-sync.sh` — fetch + sync + write `deployed.txt`
+- `bazmi-website-sync.timer` / `.service` — runs the sync every 60s
+- repo clone at `/opt/bazmi_website`
+
+### Instant manual deploy
+
+To skip the ≤60s wait (pushes the commit, then triggers the server sync immediately):
 
 ```bash
 ./deploy.sh
 ```
 
-Requires SSH key access to `root@187.124.213.14`. Static files only, so no nginx reload is
-needed. Edit the config block at the top of `deploy.sh` to change host/domain/web root.
+Requires the change committed and SSH access from a non-datacenter IP (a dev machine works).
 
-> Note: the nginx vhost's `location /` was switched from a (down) reverse-proxy to
-> `try_files $uri $uri/ /index.html`. A backup lives on the server at
-> `…/bazmivoicechat.com.conf.bak-static-deploy`. If you change this site's settings in the
-> CloudPanel UI it may regenerate the vhost and revert that block — re-apply if so.
-
-Any static host also works (GitHub Pages, Vercel, Netlify, Cloudflare Pages) — point it at the repo root.
+> nginx note: the vhost's `location /` was switched from a (down) reverse-proxy to
+> `try_files $uri $uri/ /index.html`. Backup on the server at
+> `…/bazmivoicechat.com.conf.bak-static-deploy`. Changing this site's settings in the
+> CloudPanel UI may regenerate the vhost and revert that block — re-apply if so.
 
 ---
 © 2026 Bazmi Voice Chat · Where voices become a vibe.

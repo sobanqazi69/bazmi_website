@@ -1,48 +1,45 @@
 #!/usr/bin/env bash
 #
-# Deploy the Bazmi landing site to the production server.
-# Usage:  ./deploy.sh
+# Instant manual deploy.
 #
-# Uploads index.html + assets/ to the CloudPanel web root, fixes ownership,
-# and verifies the site responds. Static files only — no nginx reload needed.
+# Production is PULL-based: a systemd timer on the server pulls this repo from
+# GitHub every 60s (see README → Deploy). This script just skips the wait —
+# it pushes the current commit, then triggers the server's sync immediately.
+#
+# Run from the project root:  ./deploy.sh
+# Requires: the change committed & SSH access to the server (port 22 works from
+# non-datacenter IPs; GitHub runners are firewalled, hence the pull model).
 
 set -euo pipefail
 
-# ── Config ────────────────────────────────────────────────
 SSH_HOST="root@187.124.213.14"
-SITE_USER="bazmivoicechat"
 DOMAIN="bazmivoicechat.com"
-WEBROOT="/home/${SITE_USER}/htdocs/${DOMAIN}"
+WEBROOT="/home/bazmivoicechat/htdocs/bazmivoicechat.com"
 
-# Files/dirs to deploy (relative to this script's directory).
-ASSETS=(index.html assets)
-
-# ──────────────────────────────────────────────────────────
 cd "$(dirname "$0")"
 
-echo "→ Uploading to ${SSH_HOST}:${WEBROOT}"
-for item in "${ASSETS[@]}"; do
-  if [[ -d "$item" ]]; then
-    scp -q -o BatchMode=yes -r "$item" "${SSH_HOST}:${WEBROOT}/"
-  else
-    scp -q -o BatchMode=yes "$item" "${SSH_HOST}:${WEBROOT}/"
-  fi
-  echo "  ✓ $item"
-done
+if [[ -n "$(git status --porcelain)" ]]; then
+  echo "✗ You have uncommitted changes. Commit them first (the server deploys committed git state)." >&2
+  git status --short
+  exit 1
+fi
 
-echo "→ Fixing ownership & permissions"
-ssh -o BatchMode=yes "$SSH_HOST" "
-  chown -R ${SITE_USER}:${SITE_USER} ${WEBROOT}/index.html ${WEBROOT}/assets
-  chmod 644 ${WEBROOT}/index.html
-  chmod 755 ${WEBROOT}/assets
-  find ${WEBROOT}/assets -type f -exec chmod 644 {} +
-"
+echo "→ Pushing to GitHub…"
+git push origin master
 
-echo "→ Verifying https://${DOMAIN}"
-CODE=$(ssh -o BatchMode=yes "$SSH_HOST" "curl -sk -o /dev/null -w '%{http_code}' https://${DOMAIN}/")
-if [[ "$CODE" == "200" ]]; then
+echo "→ Triggering server sync (instead of waiting for the 60s timer)…"
+ssh -o ConnectTimeout=20 "$SSH_HOST" 'systemctl start bazmi-website-sync.service'
+
+echo "→ Verifying production…"
+LIVE=$(ssh "$SSH_HOST" "cat ${WEBROOT}/deployed.txt")
+CODE=$(ssh "$SSH_HOST" "curl -sk -o /dev/null -w '%{http_code}' https://${DOMAIN}/")
+HEAD=$(git rev-parse HEAD)
+
+echo "  live commit : $LIVE"
+echo "  pushed commit: $HEAD"
+if [[ "$LIVE" == "$HEAD" && "$CODE" == "200" ]]; then
   echo "✓ Live — https://${DOMAIN} (HTTP $CODE)"
 else
-  echo "✗ Unexpected status: HTTP $CODE — check the server" >&2
+  echo "✗ Mismatch or bad status (HTTP $CODE) — check the server" >&2
   exit 1
 fi

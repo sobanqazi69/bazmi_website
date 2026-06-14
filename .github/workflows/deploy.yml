@@ -1,12 +1,16 @@
 name: Deploy to bazmivoicechat.com
 
+# The production host (CloudPanel @ 187.124.213.14) sits behind a provider
+# firewall that drops inbound SSH from datacenter/cloud IP ranges — so GitHub's
+# runners cannot SSH/rsync to it on ANY port (22 and 2222 both time out, while
+# 80/443 are open). Deployment is therefore PULL-based: a systemd timer on the
+# server fetches this repo every 60s and publishes the live commit to
+# /deployed.txt. This workflow validates the build, then polls that file over
+# HTTPS until production confirms it is serving the pushed commit.
+
 on:
   push:
     branches: [master]
-    paths:
-      - 'index.html'
-      - 'assets/**'
-      - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
 concurrency:
@@ -16,43 +20,31 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    env:
-      SSH_HOST: 187.124.213.14
-      SSH_PORT: '2222'
-      SITE_USER: bazmivoicechat
-      WEBROOT: /home/bazmivoicechat/htdocs/bazmivoicechat.com
-      SSH_OPTS: -i ~/.ssh/id_ed25519 -p 2222 -o StrictHostKeyChecking=accept-new -o ConnectTimeout=25 -o ServerAliveInterval=15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up SSH key
+      - name: Validate build
         run: |
-          mkdir -p ~/.ssh && chmod 700 ~/.ssh
-          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          # Best-effort known_hosts; accept-new below handles first connect anyway.
-          ssh-keyscan -p "$SSH_PORT" -t rsa,ed25519 -T 10 "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          test -f index.html
+          test -f assets/logo.png
+          grep -q "<title>" index.html
+          test "$(wc -c < index.html)" -gt 2000
+          echo "✓ build looks valid"
 
-      - name: Upload site (rsync)
+      - name: Wait for production to serve ${{ github.sha }}
         run: |
-          rsync -az --omit-dir-times --no-perms \
-            -e "ssh $SSH_OPTS" \
-            index.html assets \
-            "root@${SSH_HOST}:${WEBROOT}/"
-
-      - name: Fix ownership & permissions
-        run: |
-          ssh $SSH_OPTS "root@${SSH_HOST}" "
-            chown -R ${SITE_USER}:${SITE_USER} ${WEBROOT}/index.html ${WEBROOT}/assets
-            chmod 644 ${WEBROOT}/index.html
-            chmod 755 ${WEBROOT}/assets
-            find ${WEBROOT}/assets -type f -exec chmod 644 {} +
-          "
-
-      - name: Verify live
-        run: |
-          CODE=$(ssh $SSH_OPTS "root@${SSH_HOST}" \
-            "curl -sk -o /dev/null -w '%{http_code}' https://bazmivoicechat.com/")
-          echo "https://bazmivoicechat.com -> HTTP $CODE"
-          test "$CODE" = "200"
+          echo "Waiting for the server's 60s pull timer to publish this commit…"
+          for i in $(seq 1 30); do
+            LIVE=$(curl -fsSk --max-time 10 https://bazmivoicechat.com/deployed.txt 2>/dev/null | tr -d '[:space:]' || true)
+            echo "  attempt $i — live=${LIVE:-<none>}"
+            if [ "$LIVE" = "${{ github.sha }}" ]; then
+              CODE=$(curl -sk -o /dev/null -w '%{http_code}' https://bazmivoicechat.com/)
+              echo "✓ Production is serving ${{ github.sha }} (HTTP $CODE)"
+              test "$CODE" = "200"
+              exit 0
+            fi
+            sleep 12
+          done
+          echo "✗ Timed out waiting for production to report ${{ github.sha }}" >&2
+          exit 1
