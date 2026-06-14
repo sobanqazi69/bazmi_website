@@ -247,10 +247,11 @@
   .feat.big{grid-column:span 3}
   .feat.sm{grid-column:span 3}
   .feat.col2{grid-column:span 2}
+  .feat.live{grid-column:span 2}
   @media(max-width:880px){.bento{grid-template-columns:1fr 1fr}.feat.big,.feat.sm,.feat.col2{grid-column:span 1}.feat.live{grid-column:span 2}}
   @media(max-width:560px){.bento{grid-template-columns:1fr}.feat.big,.feat.sm,.feat.col2,.feat.live{grid-column:span 1}}
 
-  .feat.live{grid-column:span 2;color:#fff;background:var(--ink);border-color:transparent}
+  .feat.live{color:#fff;background:var(--ink);border-color:transparent}
   .feat.live::before{content:"";position:absolute;inset:0;background:
     radial-gradient(140px 140px at 80% 20%,rgba(0,229,255,.35),transparent),
     radial-gradient(160px 160px at 10% 90%,rgba(224,69,123,.45),transparent)}
