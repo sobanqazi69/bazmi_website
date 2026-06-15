@@ -976,10 +976,15 @@
       elRoomAv.innerHTML = /^https:\/\//.test(r.image||'') ? '<img src="'+r.image+'" alt="">' : '🎵';
       elName.textContent=r.name||'Room';
       elHost.textContent=flag(o.country)+' · live audio';
-      elSeatName.textContent=o.name||'Host';
-      elAvPh.textContent=((o.name||'?').trim()[0]||'?').toUpperCase();
-      if(/^https:\/\//.test(o.avatar||'')){elAv.src=o.avatar;elAv.style.display='block';elAv.onerror=()=>{elAv.style.display='none';};}else{elAv.style.display='none';}
-      elCrown.style.display=(o.crownLevel>0)?'block':'none';
+      const hostName=o.name||'Host', hostAv=/^https:\/\//.test(o.avatar||'')?o.avatar:null, hostCrown=o.crownLevel>0;
+      const setOccupant=(name,avUrl,crown)=>{
+        elSeatName.textContent=name||'Speaker';
+        elAvPh.textContent=((name||'?').trim()[0]||'?').toUpperCase();
+        if(avUrl){elAv.src=avUrl;elAv.style.display='block';elAv.onerror=()=>{elAv.style.display='none';};}
+        else{elAv.removeAttribute('src');elAv.style.display='none';}
+        elCrown.style.display=crown?'block':'none';
+      };
+      setOccupant(hostName,hostAv,hostCrown);
       elHostAv.classList.remove('speaking');elEq.classList.remove('speaking');
       elStatus.textContent='Connecting…';
       elProg.style.transition='none';elProg.style.transform='scaleX(1)';elCount.textContent=DURATION;
@@ -995,9 +1000,17 @@
           if(track.kind===LK.Track.Kind.Audio){const a=track.attach();a.autoplay=true;a.style.display='none';document.body.appendChild(a);audioEls.push(a);a.play().catch(()=>{});}
         });
         room.on(LK.RoomEvent.ActiveSpeakersChanged,(sp)=>{
-          const on=!!(sp&&sp.length);
-          elHostAv.classList.toggle('speaking',on);elEq.classList.toggle('speaking',on);
-          elStatus.textContent= on ? (((sp[0]&&sp[0].name)?sp[0].name:'Someone')+' is speaking') : 'Listening to the room…';
+          const s=(sp&&sp.length)?sp[0]:null;
+          if(s){
+            const isHost=s.identity===o.id;
+            setOccupant(s.name||'Speaker', isHost?hostAv:null, isHost&&hostCrown);
+            elHostAv.classList.add('speaking');elEq.classList.add('speaking');
+            elStatus.textContent=(s.name||'Someone')+' is speaking';
+          }else{
+            setOccupant(hostName,hostAv,hostCrown);
+            elHostAv.classList.remove('speaking');elEq.classList.remove('speaking');
+            elStatus.textContent='Listening to the room…';
+          }
         });
         await room.connect(data.data.url,data.data.token);
         try{await room.startAudio();}catch(e){}
