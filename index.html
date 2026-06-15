@@ -956,7 +956,7 @@
     const elHostAv=el('lmHostAv'),elAv=el('lmAv'),elAvPh=el('lmAvPh'),elSeatName=el('lmSeatName'),elCrown=el('lmCrown');
     const elEq=el('lmEq'),elStatus=el('lmStatus'),elProg=el('lmProg'),elCount=el('lmCount'),elGateText=el('lmGateText');
     const DURATION=30;
-    let room=null,audioEls=[],timers=[],countId=null;
+    let room=null,audioEls=[],timers=[],countId=null,speakOffTimer=null;
 
     elEq.innerHTML=Array.from({length:18},()=>`<i style="animation-delay:-${Math.random().toFixed(2)}s"></i>`).join('');
     const flag=cc=>(!cc||cc.length!==2)?'🌐':cc.toUpperCase().replace(/[A-Z]/g,c=>String.fromCodePoint(127397+c.charCodeAt(0)));
@@ -964,6 +964,7 @@
     function cleanup(){
       timers.forEach(clearTimeout);timers=[];
       if(countId){clearInterval(countId);countId=null;}
+      if(speakOffTimer){clearTimeout(speakOffTimer);speakOffTimer=null;}
       audioEls.forEach(a=>{try{a.pause();a.srcObject=null;a.remove();}catch(e){}});audioEls=[];
       if(room){try{room.disconnect();}catch(e){}room=null;}
     }
@@ -985,6 +986,7 @@
         elCrown.style.display=crown?'block':'none';
       };
       setOccupant(hostName,hostAv,hostCrown);
+      let currentSpeakerId=null;
       elHostAv.classList.remove('speaking');elEq.classList.remove('speaking');
       elStatus.textContent='Connecting…';
       elProg.style.transition='none';elProg.style.transform='scaleX(1)';elCount.textContent=DURATION;
@@ -1002,14 +1004,21 @@
         room.on(LK.RoomEvent.ActiveSpeakersChanged,(sp)=>{
           const s=(sp&&sp.length)?sp[0]:null;
           if(s){
-            const isHost=s.identity===o.id;
-            setOccupant(s.name||'Speaker', isHost?hostAv:null, isHost&&hostCrown);
+            if(speakOffTimer){clearTimeout(speakOffTimer);speakOffTimer=null;}
+            if(s.identity!==currentSpeakerId){
+              currentSpeakerId=s.identity;
+              const isHost=s.identity===o.id;
+              setOccupant(s.name||'Speaker', isHost?hostAv:null, isHost&&hostCrown);
+            }
             elHostAv.classList.add('speaking');elEq.classList.add('speaking');
             elStatus.textContent=(s.name||'Someone')+' is speaking';
-          }else{
-            setOccupant(hostName,hostAv,hostCrown);
-            elHostAv.classList.remove('speaking');elEq.classList.remove('speaking');
-            elStatus.textContent='Listening to the room…';
+          }else if(!speakOffTimer){
+            // brief pause — keep the last speaker on the seat, just soften the rings
+            speakOffTimer=setTimeout(()=>{
+              elHostAv.classList.remove('speaking');elEq.classList.remove('speaking');
+              elStatus.textContent='Listening to the room…';
+              speakOffTimer=null;
+            },900);
           }
         });
         await room.connect(data.data.url,data.data.token);
